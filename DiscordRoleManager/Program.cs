@@ -63,43 +63,46 @@ namespace DiscordRoleManager
         private async Task OnClientReady()
         {
             Console.WriteLine("OnClientReady");
+
+            var fields = new List<EmbedFieldBuilder>();
+            emoteAndRoleRelationsList.ForEach(
+                relation => fields.Add(
+                    new EmbedFieldBuilder
+                    {
+                        Name = _client.Guilds.SelectMany(guild => guild.Roles).First(roles => roles.Id == relation.RoleId).Name,
+                        Value = relation.EmbedDescription
+                    })
+                );
+
             var em = new EmbedBuilder
             {
-                Title = "Hello everyone! <:kot666:758691414090973226>",
-                Fields = new List<EmbedFieldBuilder> { 
-                    new EmbedFieldBuilder { Name = "asd", Value = "dsa" },
-                    new EmbedFieldBuilder { Name = "1", Value = "dsa3" },
-                },
-                Footer = new EmbedFooterBuilder { Text = "footer" }
+                Title = "Драсть! Этот бот управляет ролями!",
+                Description = "Для приминения роли добавьте соответствующую реакцию, для отмены, соответственно, удалите.",
+                Fields = fields,
+                Footer = new EmbedFooterBuilder { Text = "Discord role manager" }
             };
 
             workTextChannel = _client.GetGuild(WorkGuildId).GetTextChannel(WorkTextChannelId);
 
-            var gettingMessageTask = workTextChannel.GetMessageAsync(WorkMessageId);
-            gettingMessageTask.Wait();
-            workTextMessage = gettingMessageTask.Result as RestUserMessage;
-
+            workTextMessage = (RestUserMessage) await workTextChannel.GetMessageAsync(WorkMessageId, new RequestOptions { Timeout = 5000});
             if (workTextMessage == null)
             {
-                var sendingMessageTask = workTextChannel.SendMessageAsync(null, false, em.Build());
-                sendingMessageTask.Wait();
-
-                workTextMessage = sendingMessageTask.Result;
+                workTextMessage = await workTextChannel.SendMessageAsync(null, false, em.Build());
                 WorkMessageId = workTextMessage.Id;
                 Console.WriteLine($"rewrite workMessageId, new value is {WorkMessageId}");
             }
             else
             {
-                await workTextMessage.ModifyAsync(x => x.Embed = em.Build());
+                await workTextMessage.ModifyAsync(x => x.Embed = em.Build());          
                 Console.WriteLine("Work message is found");
             }
 
-            var re =  workTextChannel.Guild.Emotes.Where(guildEmote => 
+            var reactionsToAdd = workTextChannel.Guild.Emotes.Where(guildEmote => 
                     emoteAndRoleRelationsList.Any(emoteFromList => 
                         guildEmote.Name == emoteFromList.EmoteName
                             )).ToArray();
 
-            await workTextMessage.AddReactionsAsync(re);
+            await workTextMessage.AddReactionsAsync(reactionsToAdd);
 
             _client.MessageReceived += OnMessageReceived;
             _client.ReactionAdded += OnReactionAdded;
