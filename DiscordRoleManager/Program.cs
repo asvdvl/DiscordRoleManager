@@ -18,7 +18,7 @@ namespace DiscordRoleManager
 
         readonly List<string> stringsForAnswer = new List<string> {
             "атыбись!", "че надо, я занят!!1!", ", извините, но я сегодня слишком занят для бесполезного общения", "",
-            "пожалуйся, не отвлекайте меня", "вы что-то сказали, я не расслышал?", "ты опять выходишь на связь, мудило?", 
+            "пожалуйся, не отвлекайте меня", "вы что-то сказали, я не расслышал?", "ты опять выходишь на связь, мудило?",
             "418", "бот сломан, по всем вопросам писать @Deleteduser"};
         readonly List<EmoteAndRoleRelation> emoteAndRoleRelationsList = new List<EmoteAndRoleRelation>
         {
@@ -65,14 +65,16 @@ namespace DiscordRoleManager
             Console.WriteLine("OnClientReady");
 
             var fields = new List<EmbedFieldBuilder>();
-            emoteAndRoleRelationsList.ForEach(
-                relation => fields.Add(
-                    new EmbedFieldBuilder
-                    {
-                        Name = _client.Guilds.SelectMany(guild => guild.Roles).First(roles => roles.Id == relation.RoleId).Name,
-                        Value = relation.EmbedDescription
-                    })
-                );
+            foreach (var relation in emoteAndRoleRelationsList)
+            {
+                var role = _client.Guilds.SelectMany(guild => guild.Roles).First(roles => roles.Id == relation.RoleId);
+                var field = new EmbedFieldBuilder
+                {
+                    Name = relation.isEmoji ? relation.EmoteName : role.Guild.Emotes.First(emote => emote.Name == relation.EmoteName).ToString(),
+                    Value = relation.EmbedDescription
+                };
+                fields.Add(field);
+            }
 
             var em = new EmbedBuilder
             {
@@ -97,12 +99,21 @@ namespace DiscordRoleManager
                 Console.WriteLine("Work message is found");
             }
 
-            var reactionsToAdd = workTextChannel.Guild.Emotes.Where(guildEmote => 
-                    emoteAndRoleRelationsList.Any(emoteFromList => 
-                        guildEmote.Name == emoteFromList.EmoteName
-                            )).ToArray();
+            List<IEmote> reactionsToAdd = new List<IEmote>();
 
-            await workTextMessage.AddReactionsAsync(reactionsToAdd);
+            foreach (var relation in emoteAndRoleRelationsList)
+            {
+                if (relation.isEmoji)
+                {
+                    reactionsToAdd.Add(new Emoji(relation.EmoteName));
+                }
+                else
+                {
+                    reactionsToAdd.Add(workTextChannel.Guild.Emotes.First(emote => emote.Name == relation.EmoteName));
+                }
+            }
+
+            await workTextMessage.AddReactionsAsync(reactionsToAdd.ToArray());
 
             _client.MessageReceived += OnMessageReceived;
             _client.ReactionAdded += OnReactionAdded;
@@ -138,7 +149,7 @@ namespace DiscordRoleManager
             Console.WriteLine($"OnReactionRemoved, messageid: {reaction.MessageId} Name: " +
                 $"{reaction.Emote.Name} {(reaction.Emote.Name.Length == 1 ? Char.ConvertToUtf32(reaction.Emote.Name, 0) : ' ')} " +
                 $"by: {reaction.UserId}");
-            if (reaction.MessageId.Equals(workTextMessage.Id) || reaction.UserId != _client.CurrentUser.Id)
+            if (reaction.MessageId.Equals(workTextMessage.Id) && reaction.UserId != _client.CurrentUser.Id)
             {
                 Console.WriteLine($"Reaction removed for work message");
                 var currentWorkClannel = textChannel as SocketTextChannel;
@@ -160,7 +171,7 @@ namespace DiscordRoleManager
             Console.WriteLine($"OnReactionAdded, messageid: {reaction.MessageId} Name: " +
                 $"{reaction.Emote.Name} {(reaction.Emote.Name.Length == 1 ? Char.ConvertToUtf32(reaction.Emote.Name, 0) : ' ')} " +
                 $"by: {reaction.UserId}");
-            if (reaction.MessageId.Equals(workTextMessage.Id) || reaction.UserId != _client.CurrentUser.Id)
+            if (reaction.MessageId.Equals(workTextMessage.Id) && reaction.UserId != _client.CurrentUser.Id)
             {
                 Console.WriteLine($"Reaction added for work message");
                 var currentWorkClannel = textChannel as SocketTextChannel;
@@ -180,6 +191,7 @@ namespace DiscordRoleManager
         struct EmoteAndRoleRelation
         {
             public string EmoteName;
+            public bool isEmoji;
             public string EmbedDescription;
             public ulong RoleId;
         }
